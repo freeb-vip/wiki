@@ -1,0 +1,14 @@
+# Patterns to ignore when building packages.
+# This supports shell glob patterns, relative path patterns, and path patterns
+# with ** and ***.  For more information about excluding files from the chart package
+# see https://helm.sh/docs/developing_charts/#chart-file-structure
+.git/
+.gitignore
+.helmignore
+Chart.lock
+.DS_Store
+.idea/
+*.swp
+*.swo
+*~
+.vscode/

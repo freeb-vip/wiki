@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: wiki-postgres
+    environment:
+      POSTGRES_DB: wiki
+      POSTGRES_USER: wiki
+      POSTGRES_PASSWORD: wiki123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wiki"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wiki-network
+
+  # Wiki.js 应用
+  wiki:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wiki-app
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: wiki
+      DB_USER: wiki
+      DB_PASS: wiki123
+      HA_ACTIVE: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - wiki_data:/wiki/data/content
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - wiki-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  wiki_data:
+    driver: local
+
+networks:
+  wiki-network:
+    driver: bridge

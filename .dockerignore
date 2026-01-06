@@ -1,0 +1,46 @@
+# Git 和版本控制
+.git
+.gitignore
+.gitattributes
+
+# 依赖和构建输出
+node_modules
+npm-debug.log
+yarn-error.log
+.npm
+.yarn-cache
+
+# IDE 和编辑器
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+.travis.yml
+
+# 测试和覆盖
+coverage
+.jest
+.nyc_output
+cypress/screenshots
+cypress/videos
+
+# 文档
+*.md
+docs
+examples
+
+# 其他
+.env
+.env.local
+*.log
+dist
+build
+.cache

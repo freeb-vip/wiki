@@ -1,0 +1,11 @@
+# OpenShift 兼容的 Dockerfile
+# 基于 requarks/wiki 镜像进行适配
+
+FROM requarks/wiki:2
+
+USER root
+
+RUN chgrp -R 0 /wiki /logs && \
+    chmod -R g=u /wiki /logs
+
+USER 1001

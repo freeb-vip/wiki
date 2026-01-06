@@ -68,7 +68,7 @@ type StorageStatus {
   title: String!
   status: String!
   message: String!
-  lastAttempt: String!
+  lastAttempt: String
 }
 
 type StorageTargetAction {
