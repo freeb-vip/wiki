@@ -1,5 +1,9 @@
 <template lang="pug">
   v-app
+    .login-local-trigger(v-if='hideLocal && hasLocalStrategy')
+      v-btn(text, dark, @click='showLocalLoginDialog')
+        v-icon(left) mdi-account-key
+        span {{ $t('auth:actions.login') }}
     .login(:style='`background-image: url(` + bgUrl + `);`')
       .login-sd
         .d-flex.mb-5
@@ -21,24 +25,27 @@
         //-------------------------------------------------
         //- PROVIDERS LIST
         //-------------------------------------------------
-        template(v-if='screen === `login` && strategies.length > 1')
+        template(v-if='screen === `login` && filteredStrategies.length > 0')
           .login-subtitle
             .text-subtitle-1 {{$t('auth:selectAuthProvider')}}
-          .login-list
-            v-list.elevation-1.radius-7(nav, light)
-              v-list-item-group(v-model='selectedStrategyKey')
-                v-list-item(
-                  v-for='(stg, idx) of filteredStrategies'
-                  :key='stg.key'
-                  :value='stg.key'
-                  :color='stg.strategy.color'
-                  )
-                  v-avatar.mr-3(tile, size='24', v-html='stg.strategy.icon')
-                  span.text-none {{stg.displayName}}
+          .login-list.pa-8.d-flex.flex-column.align-center
+            v-btn.mb-4.text-none(
+              v-for='(stg, idx) of filteredStrategies'
+              :key='stg.key'
+              block
+              rounded
+              elevation="3"
+              height="64"
+              :color='stg.strategy.color'
+              dark
+              @click='selectedStrategyKey = stg.key'
+              )
+              v-avatar.mr-4(tile, size='32', v-html='stg.strategy.icon', style="filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2))")
+              span.text-h6.font-weight-medium {{stg.displayName}}
         //-------------------------------------------------
         //- LOGIN FORM
         //-------------------------------------------------
-        template(v-if='screen === `login` && selectedStrategy.strategy.useForm')
+        template(v-if='screen === `login` && selectedStrategy.strategy.useForm && (!hideLocal || selectedStrategyKey !== `local`)')
           .login-subtitle
             .text-subtitle-1 {{$t('auth:enterCredentials')}}
           .login-form
@@ -243,6 +250,67 @@
             :loading='isLoading'
             ) {{ $t('auth:tfa.verifyToken') }}
 
+    //-------------------------------------------------
+    //- LOCAL LOGIN DIALOG
+    //-------------------------------------------------
+    v-dialog(v-model='isLocalLoginDialogShown', max-width='500')
+      v-card
+        .login-subtitle
+          .text-subtitle-1 {{$t('auth:enterCredentials')}}
+        .login-form
+          v-text-field(
+            solo
+            flat
+            prepend-inner-icon='mdi-clipboard-account'
+            background-color='white'
+            color='blue darken-2'
+            hide-details
+            v-model='username'
+            :placeholder='isUsernameEmail ? $t(`auth:fields.email`) : $t(`auth:fields.username`)'
+            :type='isUsernameEmail ? `email` : `text`'
+            :autocomplete='isUsernameEmail ? `email` : `username`'
+            light
+            )
+          v-text-field.mt-2(
+            solo
+            flat
+            prepend-inner-icon='mdi-form-textbox-password'
+            background-color='white'
+            color='blue darken-2'
+            hide-details
+            v-model='password'
+            :append-icon='hidePassword ? "mdi-eye-off" : "mdi-eye"'
+            @click:append='() => (hidePassword = !hidePassword)'
+            :type='hidePassword ? "password" : "text"'
+            :placeholder='$t("auth:fields.password")'
+            autocomplete='current-password'
+            @keyup.enter='login'
+            light
+          )
+          v-btn.mt-2.text-none(
+            width='100%'
+            large
+            color='blue darken-2'
+            dark
+            @click='login'
+            :loading='isLoading'
+            ) {{ $t('auth:actions.login') }}
+          .text-center.mt-5
+            v-btn.text-none(
+              text
+              rounded
+              color='grey darken-3'
+              @click.stop.prevent='forgotPassword'
+              href='#forgot'
+              ): .caption {{ $t('auth:forgotPasswordLink') }}
+            v-btn.text-none(
+              v-if='selectedStrategyKey === `local` && selectedStrategy.selfRegistration'
+              color='indigo darken-2'
+              text
+              rounded
+              href='/register'
+              ): .caption {{ $t('auth:switchToRegister.link') }}
+
     loader(v-model='isLoading', :color='loaderColor', :title='loaderTitle', :subtitle='$t(`auth:pleaseWait`)')
     notify(style='padding-top: 64px;')
 </template>
@@ -295,7 +363,8 @@ export default {
       isTFASetupShown: false,
       tfaQRImage: '',
       errorShown: false,
-      errorMessage: ''
+      errorMessage: '',
+      isLocalLoginDialogShown: false
     }
   },
   computed: {
@@ -307,6 +376,9 @@ export default {
       return this.strategies.length > 1
     },
     logoUrl () { return siteConfig.logoUrl },
+    hasLocalStrategy () {
+      return _.some(this.strategies, ['key', 'local'])
+    },
     filteredStrategies () {
       const qParams = new URLSearchParams(window.location.search)
       if (this.hideLocal && !qParams.has('all')) {
@@ -321,22 +393,30 @@ export default {
   },
   watch: {
     filteredStrategies (newValue, oldValue) {
-      if (_.head(newValue).strategy.useForm) {
+      if (_.head(newValue) && _.get(_.head(newValue), 'strategy.useForm')) {
         this.selectedStrategyKey = _.head(newValue).key
       }
     },
     selectedStrategyKey (newValue, oldValue) {
-      this.selectedStrategy = _.find(this.strategies, ['key', newValue])
+      const stg = _.find(this.strategies, ['key', newValue])
+      if (stg) {
+        this.selectedStrategy = stg
+      } else {
+        this.selectedStrategy = { key: 'unselected', strategy: { useForm: false, usernameType: 'email' } }
+      }
+
       if (this.screen === 'changePwd') {
         return
       }
       this.screen = 'login'
-      if (!this.selectedStrategy.strategy.useForm) {
+      if (this.selectedStrategy.key !== 'unselected' && !this.selectedStrategy.strategy.useForm) {
         this.isLoading = true
         window.location.assign('/login/' + newValue)
-      } else {
+      } else if (this.selectedStrategy.key !== 'unselected') {
         this.$nextTick(() => {
-          this.$refs.iptEmail.focus()
+          if (this.$refs.iptEmail) {
+            this.$refs.iptEmail.focus()
+          }
         })
       }
     }
@@ -615,6 +695,10 @@ export default {
       }
       this.isLoading = false
     },
+    showLocalLoginDialog () {
+      this.selectedStrategyKey = 'local'
+      this.isLocalLoginDialogShown = true
+    },
     handleLoginResponse (respObj) {
       this.continuationToken = respObj.continuationToken
       if (respObj.mustChangePwd === true) {
@@ -699,6 +783,25 @@ export default {
     width: 100%;
     height: 100%;
 
+    &-local-trigger {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      z-index: 5;
+      background-color: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.2);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      border-radius: 20px;
+      transition: all .3s ease;
+
+      &:hover {
+        background-color: rgba(255,255,255,.3);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      }
+    }
+
     &-sd {
       background-color: rgba(255,255,255,.8);
       backdrop-filter: blur(10px);
@@ -760,6 +863,14 @@ export default {
     &-list {
       border-top: 1px solid rgba(255,255,255,.85);
       padding: 12px;
+
+      .v-btn {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        &:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 6px 15px rgba(0,0,0,0.2) !important;
+        }
+      }
     }
 
     &-form {
